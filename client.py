@@ -19,6 +19,7 @@ class Client:
         if data == "wrong":
             print("Old version")
             print(f"Update to version {self.get_packet()} to connect")
+            print("https://github.com/astovali/LAN-battleships")
         if data == "waiting":
             print("Waiting for another client, please do not disconnect")
             if self.get_packet() == "found":
