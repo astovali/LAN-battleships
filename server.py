@@ -4,7 +4,7 @@ import threading
 class DisconnectError(Exception):
     pass
 
-VERSION = 1
+VERSION = 2
 
 c = 0
 addr = 1
@@ -71,8 +71,20 @@ class Server:
         p2.append(self.get_packet(p2[c]))
         self.send_packet(p1[c], p2[username])
         self.send_packet(p2[c], p1[username])
-        p1[c].close()
-        p2[c].close()
 
-server = Server(input("Port: "))
+        def message(send, recieve):
+            msg = ""
+            while msg.lower() != "bye":
+                msg = self.get_packet(send[c])
+                self.send_packet(recieve[c], msg)
+            raise DisconnectError(f"{send[username]} said bye to {recieve[username]}")
+
+        t1 = threading.Thread(target=message, args=(p1, p2))
+        t2 = threading.Thread(target=message, args=(p2, p1))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+server = Server(int(input("Port: ")))
 server.accepter.join()

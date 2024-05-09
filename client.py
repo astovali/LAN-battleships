@@ -1,7 +1,7 @@
 import socket
 import threading
 
-VERSION = 1
+VERSION = 2
 
 class DisconnectError(Exception):
     pass
@@ -26,9 +26,24 @@ class Client:
                 print("Server found another client")
                 data = self.get_packet()
         if data == "game_start":
-            self.send_packet(input("Tell them your name: "))
-            print(f"Hi to {self.get_packet()}")
-        input('')
+            my_name = input("Tell them your name: ")
+            self.send_packet(my_name)
+            their_name = self.get_packet()
+            print(f"Say hi to {their_name}")
+            print("You can say 'bye' to disconnect")
+        
+            def send():
+                while True:
+                    self.send_packet(input())
+
+            def recieve():
+                while True:
+                    print(f"{their_name}: {self.get_packet()}")
+            
+            t1 = threading.Thread(target=send)
+            t2 = threading.Thread(target=recieve)
+            t1.start()
+            t2.start()
 
     def send_packet(self, packet):
         packet = str(packet)
@@ -43,4 +58,4 @@ class Client:
         data = self.s.recv(data_size, socket.MSG_WAITALL)
         return data.decode("utf8")
 
-server = Client(input("Server IP: "), input("Port: "))
+server = Client(input("Server IP: "), int(input("Port: ")))
