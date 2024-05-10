@@ -22,8 +22,6 @@ class Server:
         self.game_threads = []
         self.waiting_client = ()
         self.accepter = threading.Thread(target=self.accept_clients)
-        self.accepter.start()
-        print("Server up!")
 
     def send_packet(self, client, packet):
         packet = str(packet)
@@ -41,7 +39,9 @@ class Server:
     def accept_clients(self):
         while True:
             client = self.s.accept()
+            print(f"{client[addr]} connected")
             if int(self.get_packet(client[c])) != VERSION:
+                print("...with wrong version")
                 self.send_packet(client[c], "wrong")
                 self.send_packet(client[c], VERSION)
                 client[c].close()
@@ -71,6 +71,7 @@ class Server:
         p2.append(self.get_packet(p2[c]))
         self.send_packet(p1[c], p2[username])
         self.send_packet(p2[c], p1[username])
+        print(f"Game between '{p1[username]}' {p1[addr]} and '{p2[username]}' {p2[addr]} began")
 
         def message(send, recieve):
             msg = ""
@@ -85,6 +86,14 @@ class Server:
         t2.start()
         t1.join()
         t2.join()
+        print(f"Game between '{p1[username]}' {p1[addr]} and '{p2[username]}' {p2[addr]} ended")
 
 server = Server(int(input("Port: ")))
+server.accepter.start()
+print("Server up!")
 server.accepter.join()
+while True:
+    server.accepter = threading.Thread(target=server.accept_clients)
+    server.accepter.start()
+    print("Server reboot")
+    server.accepter.join()

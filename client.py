@@ -20,6 +20,7 @@ class Client:
             print("Old version")
             print(f"Update to version {self.get_packet()} to connect")
             print("https://github.com/astovali/LAN-battleships")
+            input('')
         if data == "waiting":
             print("Waiting for another client, please do not disconnect")
             if self.get_packet() == "found":
@@ -35,11 +36,17 @@ class Client:
         
             def send():
                 while True:
-                    self.send_packet(input())
+                    msg = input()
+                    self.send_packet(msg)
+                    if msg == "bye":
+                        raise DisconnectError("I said bye")
 
             def recieve():
                 while True:
-                    print(f"{their_name}: {self.get_packet()}")
+                    msg = self.get_packet()
+                    print(f"{their_name}: {msg}")
+                    if msg == "bye":
+                        raise DisconnectError(f"{their_name} said bye")
             
             t1 = threading.Thread(target=send)
             t2 = threading.Thread(target=recieve)
@@ -59,4 +66,4 @@ class Client:
         data = self.s.recv(data_size, socket.MSG_WAITALL)
         return data.decode("utf8")
 
-server = Client(input("Server IP: "), int(input("Port: ")))
+client = Client(input("Server IP: "), int(input("Port: ")))
