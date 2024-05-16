@@ -9,6 +9,8 @@ VERSION = 2
 c = 0
 addr = 1
 username = 2
+brd = 3
+buffer = 4
 
 class Server:
     def __init__(self, port):
@@ -61,6 +63,51 @@ class Server:
             else:
                 self.waiting_client = client
                 self.send_packet(self.waiting_client[c], "waiting")
+    
+    def decode_board(self, encoded):
+        if not encoded.isdigit():
+            return False
+        if len(encoded) != 15:
+            return False
+        board = [[" " for j in range(10)] for i in range(10)]
+        lengths = [2, 3, 3, 4, 5]
+        for i in range(0, 15, 3):
+            if encoded[i+2]=="0":
+                for j in range(lengths[i//3]):
+                    if int(encoded[i])+j > 9:
+                        return False
+                    if board[int(encoded[i])+j][int(encoded[i+1])] == "O":
+                        return False
+                    board[int(encoded[i])+j][int(encoded[i+1])] = "O"
+            if encoded[i+2]=="1":
+                for j in range(lengths[i//3]):
+                    if int(encoded[i])-j < 0:
+                        return False
+                    if board[int(encoded[i])-j][int(encoded[i+1])] == "O":
+                        return False
+                    board[int(encoded[i])-j][int(encoded[i+1])] = "O"
+            if encoded[i+2]=="2":
+                for j in range(lengths[i//3]):
+                    if int(encoded[i+1])+j > 9:
+                        return False
+                    if board[int(encoded[i])][int(encoded[i+1])+j] == "O":
+                        return False
+                    board[int(encoded[i])][int(encoded[i+1])+j] = "O"
+            if encoded[i+2]=="3":
+                for j in range(lengths[i//3]):
+                    if int(encoded[i+1])-j < 0:
+                        return False
+                    if board[int(encoded[i])][int(encoded[i+1])-j] == "O":
+                        return False
+                    board[int(encoded[i])][int(encoded[i+1])-j] = "O"
+        return board
+    
+    def board_alive(self, board):
+        for row in board:
+            for tile in row:
+                if tile == "O":
+                    return True
+        return False
 
     def handle_game(self, p1, p2):
         p1 = list(p1)
@@ -71,21 +118,88 @@ class Server:
         p2.append(self.get_packet(p2[c]))
         self.send_packet(p1[c], p2[username])
         self.send_packet(p2[c], p1[username])
+
+        p1.append(self.decode_board(self.get_packet(p1[c])))
+        p2.append(self.decode_board(self.get_packet(p2[c])))
+        while not p1[brd]:
+            self.send_packet(p1[c], "invalid")
+            p1[brd] = self.decode_board(self.get_packet(p1[c]))
+        self.send_packet(p1[c], "valid")
+        while not p2[brd]:
+            self.send_packet(p2[c], "invalid")
+            p2[brd] = self.decode_board(self.get_packet(p2[c]))
+        self.send_packet(p2[c], "valid")
+
+        p1.append({"msg": [], "mve": ""})
+        p2.append({"msg": [], "mve": ""})
+        
         print(f"Game between '{p1[username]}' {p1[addr]} and '{p2[username]}' {p2[addr]} began")
 
-        def message(send, recieve):
+        def add_buffer_from(client):
             msg = ""
-            while msg.lower() != "bye":
-                msg = self.get_packet(send[c])
-                self.send_packet(recieve[c], msg)
-            raise DisconnectError(f"{send[username]} said bye to {recieve[username]}")
+            while msg.lower() != "msgbye":
+                msg = self.get_packet(client[c])
+                if msg[0:3] == "msg":
+                    client[buffer]["msg"].append(msg)
+                elif msg[0:3] == "mve":
+                    if msg[3:].isdigit() and len(msg[3:]) == 2:
+                        client[buffer]["mve"] = msg[3:]
+            raise DisconnectError(f"{client[username]}")
+        
+        def messages(fro, to):
+            msg = ""
+            while msg.lower() != "msgbye":
+                if len(fro[buffer]["msg"]) > 0:
+                    msg = fro[buffer]["msg"].pop(0)
+                    self.send_packet(to[c], msg)
+        
+        def moves(p1, p2):
+            while self.board_alive(p1[brd]):
+                while p1[buffer]["mve"] == "":
+                    pass
+                move = p1[buffer]["mve"]
+                p1[buffer]["mve"] = ""
+                if p2[brd][int(move[0])][int(move[1])] == "O":
+                    p2[brd][int(move[0])][int(move[1])] = "X"
+                    self.send_packet(p1[c], f"hit{move}")
+                if p2[brd][int(move[0])][int(move[1])] == " ":
+                    p2[brd][int(move[0])][int(move[1])] = "O"
+                    self.send_packet(p1[c], f"mis{move}")
 
-        t1 = threading.Thread(target=message, args=(p1, p2))
-        t2 = threading.Thread(target=message, args=(p2, p1))
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
+                if not self.board_alive(p2[brd]):
+                    break
+
+                while p2[buffer]["mve"] == "":
+                    pass
+                move = p2[buffer]["mve"]
+                p2[buffer]["mve"] = ""
+                if p1[brd][int(move[0])][int(move[1])] == "O":
+                    p1[brd][int(move[0])][int(move[1])] = "X"
+                    self.send_packet(p2[c], f"hit{move}")
+                if p1[brd][int(move[0])][int(move[1])] == " ":
+                    p1[brd][int(move[0])][int(move[1])] = "O"
+                    self.send_packet(p2[c], f"mis{move}")
+            if self.board_alive(p1[brd]):
+                self.send_packet(p1[c], "sysYou won!")
+                self.send_packet(p2[c], "sysYou lost!")
+                print(f"{p1[username]}' {p1[addr]} won")
+            else:
+                self.send_packet(p2[c], "sysYou won!")
+                self.send_packet(p1[c], "sysYou lost!")
+                print(f"{p2[username]}' {p2[addr]} won")
+            p1[buffer]["msg"].insert(0, "msgbye")
+            p2[buffer]["msg"].insert(0, "msgbye")
+
+        threads = []
+        threads.append(threading.Thread(target=add_buffer_from, args=(p1,)))
+        threads.append(threading.Thread(target=add_buffer_from, args=(p2,)))
+        threads.append(threading.Thread(target=messages, args=(p1, p2)))
+        threads.append(threading.Thread(target=messages, args=(p2, p1)))
+        threads.append(threading.Thread(target=moves, args=(p2, p1)))
+        for i in range(len(threads)):
+            threads[i].start()
+        for i in range(len(threads)):
+            threads[i].join()
         print(f"Game between '{p1[username]}' {p1[addr]} and '{p2[username]}' {p2[addr]} ended")
 
 server = Server(int(input("Port: ")))
