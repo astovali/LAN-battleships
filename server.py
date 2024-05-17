@@ -4,7 +4,7 @@ import threading
 class DisconnectError(Exception):
     pass
 
-VERSION = 2
+VERSION = 3
 
 c = 0
 addr = 1

@@ -2,7 +2,7 @@ import socket
 import threading
 import tkinter as tk
 
-VERSION = 2
+VERSION = 3
 
 class DisconnectError(Exception):
     pass
